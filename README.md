@@ -11,8 +11,8 @@ didn't find one.. so i decided to build something like that.
 Get the manifest file from /deploy/deployment.yaml and modify the environment variables as you need.
 apply the manifest, checkout the the container log to see how it works.
 
-'''bash
+````bash
 kubectl apply -f deploy/deployment.yaml
-'''
+```
 
 this project is based on the work of [Pobek](https://github.com/Pobek/external-dns-pihole) that did a great job for making this work for pi-hole..
