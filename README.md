@@ -8,7 +8,7 @@ I really like external-dns and start looking for something similar thing that wi
 didn't find one.. so i decided to build something like that.
 
 ## Getting Started
-Get the manifest file from /deploy/deployment.yaml and modify the environment variables as you need.
+Get the manifest file from ```/deploy/deployment.yaml``` and modify the environment variables as you need.
 apply the manifest, checkout the the container log to see how it works.
 
 ```bash
