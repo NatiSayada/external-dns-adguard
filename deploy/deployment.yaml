@@ -25,7 +25,7 @@ metadata:
 subjects:
 - kind: ServiceAccount
   name: external-dns-adguard
-  namespace: default
+  namespace: default # if you deploying the app in a spesific namespace, update the namespace also here
 roleRef:
   kind: ClusterRole
   name: external-dns-adguard-readonly-ingress
@@ -50,7 +50,7 @@ spec:
       serviceAccountName: external-dns-adguard
       containers:
       - name: external-dns-adguard
-        image: pobek/external-dns-pihole:v0.1 # need to update
+        image: ghcr.io/natisayada/external-dns-adguard:main
         env:
           - name: DOMAIN_NAME
             value: local.lan

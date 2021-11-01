@@ -10,16 +10,9 @@ import requests
 from requests.auth import HTTPBasicAuth
 from dotenv import load_dotenv
 
-# from ..config import Config
+from config import Config
 
 load_dotenv()
-
-class Config(object):
-  DOMAIN_NAME = os.environ.get("DOMAIN_NAME")
-  ADGURED_DNS = os.environ.get("ADGURED_DNS")
-  ADGURED_USER = os.environ.get("ADGURED_USER")
-  ADGURED_PASS = os.environ.get("ADGURED_PASS")
-  MODE = os.environ.get("MODE") or "PROD"
 
 session = requests.Session()
 session.auth = (Config.ADGURED_USER, Config.ADGURED_PASS)
@@ -93,7 +86,7 @@ def ingress_deletion(extV1beta, force_deletion):
           "domain": record["domain"]
         }
 
-        #deletion_response = session.post(f'http://{Config.ADGURED_DNS}/control/rewrite/delete', json=record_to_delete)
+        deletion_response = session.post(f'http://{Config.ADGURED_DNS}/control/rewrite/delete', json=record_to_delete)
 
         if deletion_response.ok:
           logger.info(f'-- EVENT DELETE -- {record["domain"]} has been deleted from DNS')
