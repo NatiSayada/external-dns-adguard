@@ -3,11 +3,12 @@ Just like external-dns but for AdGuard Home
 
 ## What is this
 
-so i was playing around with my cluster and i needed to make some automation around internal dns.
+So i was playing around with my cluster and i needed to make some automation around my internal dns.
 I really like external-dns and start looking for something similar that will work with adguard home.
-didn't find one.. so i decided to build something like that.
+I didn't find one.. so i decided to build something like that.
 
 ## Getting Started
+
 Get the manifest file from ```/deploy/deployment.yaml``` and modify the environment variables as you need.
 apply the manifest, checkout the the container log to see how it works.
 
