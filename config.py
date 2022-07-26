@@ -5,7 +5,7 @@ load_dotenv()
 
 class Config(object):
   DOMAIN_NAME = os.environ.get("DOMAIN_NAME")
-  ADGURED_DNS = os.environ.get("ADGURED_DNS")
-  ADGURED_USER = os.environ.get("ADGURED_USER")
-  ADGURED_PASS = os.environ.get("ADGURED_PASS")
+  ADGUARD_DNS = os.environ.get("ADGUARD_DNS")
+  ADGUARD_USER = os.environ.get("ADGUARD_USER")
+  ADGUARD_PASS = os.environ.get("ADGUARD_PASS")
   MODE = os.environ.get("MODE") or "PROD"
