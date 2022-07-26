@@ -3,6 +3,7 @@ import os
 import asyncio
 import multiprocessing
 import logging
+from time import sleep
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kubernetes import client, config, watch
@@ -15,56 +16,60 @@ from config import Config
 load_dotenv()
 
 session = requests.Session()
-session.auth = (Config.ADGURED_USER, Config.ADGURED_PASS)
+session.auth = (Config.ADGUARD_USER, Config.ADGUARD_PASS)
 
-logger = logging.getLogger("external-dns-adgurde")
+logger = logging.getLogger("external-dns-adguard")
 logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
 
-def ingress_event(extV1beta):
+def ingress_event(netV1):
   watcher = watch.Watch()
-  for event in watcher.stream(extV1beta.list_ingress_for_all_namespaces):
+  for event in watcher.stream(netV1.list_ingress_for_all_namespaces):
     if event["type"] == "ADDED" or event["type"] == "MODIFIED":
-      dns_records_resp = session.get(f'http://{Config.ADGURED_DNS}/control/rewrite/list')
+      dns_records_resp = session.get(f'http://{Config.ADGUARD_DNS}/control/rewrite/list')
       if dns_records_resp.ok:
         dns_records = dns_records_resp.json()
       else:
-        logger.error("Couldnt reach adgurde")
+        logger.error("Couldnt reach adguard")
         pass
       missing_record = ""
       for rule in event["object"].spec.rules:
         if Config.DOMAIN_NAME in rule.host:
+          # missing_record needs to be set outside of the below for loop
+          # otherwise the user _has_ to have at least one record in
+          # adguard
+          missing_record = rule.host
           for record in dns_records:
-            missing_record = rule.host
             if rule.host in record["domain"]:
               missing_record = ""
               break
       if missing_record:
         try:
           lb_address = event["object"].status.load_balancer.ingress[0].ip
+          logger.error(f'-- EVENT {event["type"]} -- Found loadbalancer IP: {lb_address}')
         except Exception as ex:
           logger.error(f'-- EVENT {event["type"]} -- Couldn\'t retrieve LoadBalancer address from record \'{missing_record}\'.')
-          continue
+          sleep(10)
 
         record = {
           "domain": missing_record,
           "answer" : lb_address
         }
-        add_record_resp = session.post(f'http://{Config.ADGURED_DNS}/control/rewrite/add', json=record)
+        add_record_resp = session.post(f'http://{Config.ADGUARD_DNS}/control/rewrite/add', json=record)
         if add_record_resp.ok:
           logger.info(f'-- EVENT {event["type"]} -- {record["domain"]} has been added to DNS')
         else:
           logger.error(f'-- EVENT {event["type"]} -- Error occured while requesting to add {record["domain"]} to DNS')
           logger.error(f'-- EVENT {event["type"]} -- {add_record_resp.json()}')
 
-def ingress_deletion(extV1beta, force_deletion):
-  dns_records_resp = session.get(f'http://{Config.ADGURED_DNS}/control/rewrite/list')
+def ingress_deletion(netV1, force_deletion):
+  dns_records_resp = session.get(f'http://{Config.ADGUARD_DNS}/control/rewrite/list')
   if dns_records_resp.ok:
     dns_records = dns_records_resp.json()
-  ingress_records = extV1beta.list_ingress_for_all_namespaces()
+  ingress_records = netV1.list_ingress_for_all_namespaces()
   ingress_list = []
   load_balancer_ip = ""
   for ingress in ingress_records.items:
@@ -86,7 +91,7 @@ def ingress_deletion(extV1beta, force_deletion):
           "domain": record["domain"]
         }
 
-        deletion_response = session.post(f'http://{Config.ADGURED_DNS}/control/rewrite/delete', json=record_to_delete)
+        deletion_response = session.post(f'http://{Config.ADGUARD_DNS}/control/rewrite/delete', json=record_to_delete)
 
         if deletion_response.ok:
           logger.info(f'-- EVENT DELETE -- {record["domain"]} has been deleted from DNS')
@@ -99,7 +104,7 @@ def ingress_deletion(extV1beta, force_deletion):
           "answer": record["answer"]
         }
 
-        deletion_response = session.post(f'http://{Config.ADGURED_DNS}/control/rewrite/delete', json=record_to_delete)
+        deletion_response = session.post(f'http://{Config.ADGUARD_DNS}/control/rewrite/delete', json=record_to_delete)
         if deletion_response.ok:
           logger.info(f'-- EVENT DELETE -- {record["domain"]} has been deleted from DNS')
         else:
@@ -131,14 +136,14 @@ if __name__ == "__main__":
 
     logger.info("Starting application")
 
-    extV1beta = client.ExtensionsV1beta1Api()
+    netV1 = client.NetworkingV1Api()
 
-    proc = multiprocessing.Process(target=ingress_event, args=[extV1beta])
+    proc = multiprocessing.Process(target=ingress_event, args=[netV1])
     proc.start()
     proc.join(5)
 
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(ingress_deletion, 'interval', [extV1beta, force_deletion], seconds=15)
+    scheduler.add_job(ingress_deletion, 'interval', [netV1, force_deletion], seconds=15)
     scheduler.start()
 
     ioloop.run_forever()
