@@ -3,7 +3,6 @@ import os
 import asyncio
 import multiprocessing
 import logging
-from time import sleep
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from kubernetes import client, config, watch
@@ -52,7 +51,7 @@ def ingress_event(netV1):
           logger.error(f'-- EVENT {event["type"]} -- Found loadbalancer IP: {lb_address}')
         except Exception as ex:
           logger.error(f'-- EVENT {event["type"]} -- Couldn\'t retrieve LoadBalancer address from record \'{missing_record}\'.')
-          sleep(10)
+          continue
 
         record = {
           "domain": missing_record,
