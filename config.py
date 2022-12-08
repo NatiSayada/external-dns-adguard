@@ -8,4 +8,5 @@ class Config(object):
   ADGUARD_DNS = os.environ.get("ADGUARD_DNS")
   ADGUARD_USER = os.environ.get("ADGUARD_USER")
   ADGUARD_PASS = os.environ.get("ADGUARD_PASS")
+  ADGUARD_SCHEME = os.environ.get("ADGUARD_SCHEME") or "http"
   MODE = os.environ.get("MODE") or "PROD"
