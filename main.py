@@ -30,41 +30,51 @@ logger.addHandler(handler)
 
 def check_rewrite_exists(adguard: AdguardInstance, rule):
   for record in adguard.records:
-    if rule == record.domain:
+    #logger.info(f"Looking for record {rule}. Found record {record}. Match: {rule == record['domain']}")
+    if rule == record["domain"]:
       return True
   return False
+
+
+def handle_event(adguard: AdguardInstance, event : client.EventsV1Event):
+  logger.info(f"Got an event of type {event['type']}")
+  for rule in event["object"].spec.rules :
+    record_exists = check_rewrite_exists(adguard, rule.host)
+    if Config.DOMAIN_NAME in rule.host:
+      logger.info(f"Checking if {rule.host} exists...")
+      record_exists = check_rewrite_exists(adguard, rule.host)
+    
+      if not record_exists and (event["type"] == "ADDED"):
+        try:
+          lb_ip = event["object"].status.load_balancer.ingress[0].ip
+        except TypeError:
+          logger.info("No IP is set yet. Waiting for the MODIFIED event")
+          continue
+      elif not record_exists and (event["type"] == "MODIFIED"):
+        lb_ip = event["object"].status.load_balancer.ingress[0].ip
+        logger.info(f"Creating record {rule.host} with IP {lb_ip}")
+        resp: requests.Reponse = adguard.create_record(rule.host, lb_ip)
+        logger.info(f"Received response {resp.status_code}")
+      
+      elif record_exists and event["type"] == "DELETED":
+        lb_ip = event["object"].status.load_balancer.ingress[0].ip
+        logger.info(f"Deleting record {rule.host} with IP {lb_ip}")
+        resp : requests.Response = adguard.delete_record(rule.host, lb_ip)
+        logger.info(f"Received response {resp}")
+      
+      else:
+          logger.info(f"Record {rule.host} exists. Skipping...")
+
+    else:
+      logger.info(f"Record {rule.host} does not match domain {Config.DOMAIN_NAME}. Skipping.")
+
 
 
 def ingress_event(netV1: client.NetworkingV1Api, adguard: AdguardInstance):
   watcher = watch.Watch()
   for event in watcher.stream(netV1.list_ingress_for_all_namespaces):
-
-    record_exists == False
-    for rule in event["object"].spec.rules:
-      if Config.DOMAIN_NAME in rule.host:
-        record_exists = check_rewrite_exists(rule.host)
-      
-      if not record_exists and (event["type"] == "ADDED" or event["type"] == "MODIFIED"):
-        retry_count = 0
-        lb_ip = ""
-        while (retry_count < 6) and (lb_ip == ""):
-          time.sleep(10)
-          lb = event["object"].status.load_balancer.ingress[0]
-          if "ip" in lb:
-            logger.info(f'Found loadbalancer IP for ingress {rule.host}: {lb["ip"]}')
-            lb_ip = lb["ip"]
-          else:
-            logger.warn(f'Failed to find an IP for ingress {rule.host}')
-        if lb_ip == "":
-          error = "Failed to get an IP address for ingress"
-          logger.error(error)
-          raise Exception(error)
-        else:
-          adguard.create_record(rule.host, lb_ip)
-      
-      elif record_exists and event["type"] == "DELETED":
-        lb_ip = event["object"].status.load_balancer.ingress[0].ip
-        adguard.delete_record(rule.host, lb_ip)
+    Thread(target=handle_event, args=[adguard, event]).run()
+    
 
 if __name__ == "__main__":
   for key,val in Config.__dict__.items():
