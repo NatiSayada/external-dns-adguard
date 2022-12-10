@@ -72,8 +72,13 @@ def handle_event(adguard: AdguardInstance, event : client.EventsV1Event):
 
 def ingress_event(netV1: client.NetworkingV1Api, adguard: AdguardInstance):
   watcher = watch.Watch()
-  for event in watcher.stream(netV1.list_ingress_for_all_namespaces):
-    Thread(target=handle_event, args=[adguard, event]).run()
+  while True:
+    try:
+      for event in watcher.stream(netV1.list_ingress_for_all_namespaces):
+        Thread(target=handle_event, args=[adguard, event]).run()
+    except client.exceptions.ApiException:
+      logger.info("Watcher expired. Restarting")
+      continue
     
 
 if __name__ == "__main__":
