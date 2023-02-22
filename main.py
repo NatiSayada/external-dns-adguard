@@ -29,38 +29,34 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 def check_rewrite_exists(adguard: AdguardInstance, rule):
-  for record in adguard.records:
-    #logger.info(f"Looking for record {rule}. Found record {record}. Match: {rule == record['domain']}")
-    if rule == record["domain"]:
-      return True
-  return False
+  return [ record for record in adguard.records if rule == record["domain"] ]
 
 
 def handle_event(adguard: AdguardInstance, event : client.EventsV1Event):
   logger.info(f"Got an event of type {event['type']}")
   for rule in event["object"].spec.rules :
-    record_exists = check_rewrite_exists(adguard, rule.host)
     if Config.DOMAIN_NAME in rule.host:
       logger.info(f"Checking if {rule.host} exists...")
-      record_exists = check_rewrite_exists(adguard, rule.host)
+      # Var records should contain currently existing records which match the IP of the ingress
+      records = check_rewrite_exists(adguard, rule.host)
     
-      if not record_exists and (event["type"] == "ADDED"):
+      if not (len(records) == len(event["object"].status.loadbalancer.ingress)) and (event["type"] == "ADDED"):
         try:
           lb_ip = event["object"].status.load_balancer.ingress[0].ip
         except TypeError:
           logger.info("No IP is set yet. Waiting for the MODIFIED event")
           continue
-      elif not record_exists and (event["type"] == "MODIFIED"):
-        lb_ip = event["object"].status.load_balancer.ingress[0].ip
-        logger.info(f"Creating record {rule.host} with IP {lb_ip}")
-        resp: requests.Reponse = adguard.create_record(rule.host, lb_ip)
-        logger.info(f"Received response {resp.status_code}")
+      elif not (len(records) == len(event["object"].status.loadbalancer.ingress)) and (event["type"] == "MODIFIED"):
+        for ip in records:
+          logger.info(f"Creating record {rule.host} with IP {ip}")
+          resp: requests.Reponse = adguard.create_record(rule.host, ip)
+          logger.info(f"Received response {resp.status_code}")
       
-      elif record_exists and event["type"] == "DELETED":
-        lb_ip = event["object"].status.load_balancer.ingress[0].ip
-        logger.info(f"Deleting record {rule.host} with IP {lb_ip}")
-        resp : requests.Response = adguard.delete_record(rule.host, lb_ip)
-        logger.info(f"Received response {resp}")
+      elif (len(records) == len(event["object"].status.loadbalancer.ingress)) and (event["type"] == "DELETED"):
+        for ip in records:
+          logger.info(f"Deleting record {rule.host} with IP {ip}")
+          resp : requests.Response = adguard.delete_record(rule.host, ip)
+          logger.info(f"Received response {resp}")
       
       else:
           logger.info(f"Record {rule.host} exists. Skipping...")
